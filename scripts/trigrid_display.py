@@ -76,7 +76,8 @@ class trigridDisplay(object):
         # initialize pygame and OpenGL
         pygame.init()
         # display = (800,600)
-        self.displaysize = (1200, 900)
+        # self.displaysize = (1200, 900)
+        self.displaysize = (1920, 1080)
         self.window = pygame.display.set_mode(self.displaysize, DOUBLEBUF|OPENGL)
         self.clock  = pygame.time.Clock()
 

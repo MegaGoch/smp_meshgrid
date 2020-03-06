@@ -71,10 +71,11 @@ def make_vertex_facets_hexagon(params):
             )
     else:
         points = [(0, 0, 0)]
-        for ang in [0, 60, 120, 180, 240, 300]:
+        # for ang in [0, 60, 120, 180, 240, 300]:
+        for ang in [120, 180, 240, 300, 0, 60]:
             points.append(
-                (np.cos(np.deg2rad(ang)) * params['c'],
-                 np.sin(np.deg2rad(ang)) * params['c'],
+                (np.cos(np.deg2rad(-ang)) * params['c'],
+                 np.sin(np.deg2rad(-ang)) * params['c'],
                  0.0)
             )
             
@@ -240,8 +241,8 @@ class smnode(threading.Thread):
             if k in kwargs:
                 setattr(self, k, kwargs[k])
 
-        self.coef_loss = 0.95
-        self.coef_coupling = 0.5
+        self.coef_loss = 0.8 # 0.95
+        self.coef_coupling = 1.0 # 0.5
         # self.update = self.update_spontaneous
         self.update = self.update_liquid
         
@@ -290,7 +291,7 @@ class smnode(threading.Thread):
                 # x_ = 0.0 * tris[tri_i]['state'] + (0.9 * tris[v_n]['state'])
                 # x_ = 0.5 * tris[tri_i]['state'] + (0.5 * tris[v_n]['state'])
                 # coupling = 0.05
-                coupling = 0.2
+                coupling = 1.0
                 transfer = coupling * self.inputs[input_n]
                 y_ += transfer
                 # tris[v_n]['state'] -= transfer # coupling * tris[v_n]['state']
@@ -311,7 +312,7 @@ class smnode(threading.Thread):
             
         # output transfer function
         # tris[tri_i]['state_o'] = np.log(tris[tri_i]['state'] + 1) * 2
-        self.outputs['state_o'] = np.tanh(self.state * 5)
+        self.outputs['state_o'] = np.tanh(self.state * 1)
             
     def update_liquid(self):
         """smnode.update
@@ -377,9 +378,11 @@ class meshTrimesh(threading.Thread):
 
         self.osc = kwargs['osc']
         # self.osc_target = liblo.Address('localhost', 1234)
-        self.osc_target = '1234'
+        # self.osc_target = '1234'
+        self.osc_target = liblo.Address('localhost', 1234, liblo.UDP)
+        self.osc_target_hexagon = liblo.Address('localhost', 1236, liblo.UDP)
         
-        self.coupling = 0.4
+        self.coupling = 0.2
         self.isrunning = True
         self.cnt = 0
         
@@ -400,7 +403,8 @@ class meshTrimesh(threading.Thread):
             # self.mesh.face_attributes['smnode'][nbrs[1]].inputs['n{0}'.format(nbrs[0])] = self.mesh.face_attributes['state_o'][nbrs[0]]
             self.mesh.face_attributes['smnode'][nbrs[0]].inputs['n{0}'.format(nbrs[1])] = self.coupling * self.mesh.face_attributes['smnode'][nbrs[1]].state
             self.mesh.face_attributes['smnode'][nbrs[1]].state -= self.coupling * self.mesh.face_attributes['smnode'][nbrs[1]].state
-            # self.mesh.face_attributes['smnode'][nbrs[1]].inputs['n{0}'.format(nbrs[0])] = self.mesh.face_attributes['smnode'][nbrs[0]].state
+            
+            # self.mesh.face_attributes['smnode'][nbrs[1]].inputs['n{0}'.format(nbrs[0])] = self.coupling * self.mesh.face_attributes['smnode'][nbrs[0]].state
             # self.mesh.face_attributes['smnode'][nbrs[0]].state -= self.coupling * self.mesh.face_attributes['smnode'][nbrs[0]].state
         
     def make_mesh_triangle_trimesh(self, **params):
@@ -465,6 +469,15 @@ class meshTrimesh(threading.Thread):
         # plt.aspect(1)
         # plt.show()
 
+        colors_ = [
+            np.array([1.0, 0.0, 0.0]),
+            np.array([0.5, 0.5, 0.0]),
+            np.array([0.0, 1.0, 0.0]),
+            np.array([0.0, 0.5, 0.5]),
+            np.array([0.0, 0.0, 1.0]),
+            np.array([0.5, 0.0, 0.5]),
+        ]
+        
         # create list of attribute dictionaries
         tris = []
         # loop over faces
@@ -483,6 +496,7 @@ class meshTrimesh(threading.Thread):
                 'neighbors': [], # list(mesh.face_adjacency[i]),
                 'color': np.random.uniform(0, 1, (3,)),
                 # 'color': np.array([0.7, 0.2, 0.1]),
+                # 'color': colors_[i],
                 'freq': np.random.uniform(0.05, 0.2),
                 'state': 0., # np.random.uniform(0, 1)
                 'state_o': 0., # np.random.uniform(0, 1)
@@ -522,11 +536,17 @@ class meshTrimesh(threading.Thread):
             for vert in mesh.vertices[face]:
                 verts += vert.tolist()
 
-            l_ = [i] + (v_color * v_state_o)[0,:].tolist()
+            facecolor = (v_color * v_state_o)[0,:]
+            facecolor_int = (v_color * v_state_o * 253 + 1)[0,:].astype(int)
+            l_ = [i] + facecolor.tolist()
             # print('sending face color {0}'.format(l_))
             # self.osc.send_message(b'/vert', list(verts))
             # self.osc.send_message(b'/facecolor', l_)
             self.osc.server.send(self.osc_target, '/facecolor', *l_)
+            # motors = [v_state_o[0,0] * 150] * 6
+            motors = [i] + facecolor_int.tolist()
+            # print('sending motors = {0}'.format(motors))
+            self.osc.server.send(self.osc_target_hexagon, '/hexagon_motors', *motors)
             # self.face_attributes['color'] = v_color * v_state_o
                 
 def get_params(obj='line', c=1, dim=3):
@@ -674,7 +694,7 @@ def main(args):
     # glScalef(3.0, 3.0, 3.0)
 
     # osc.send_message(b'/scale', [3.0, 3.0, 3.0])
-    osc.server.send(osc_target, '/scale', *([3.0, 3.0, 3.0]))
+    osc.server.send(osc_target, '/scale', *([4.0, 4.0, 4.0]))
     
     # start main loop
     running = True
@@ -699,7 +719,7 @@ def main(args):
         # pygame.display.flip()
         # # pygame.time.wait(20)
         # try:
-        pygame.time.wait(40)
+        pygame.time.wait(50)
         # time.sleep(0.04)
         # except Exception as e:
         #     print('failed with {0}'.format(e))
