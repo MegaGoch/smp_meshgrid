@@ -6,22 +6,20 @@ a simulation and realtime monitor / interface to spatial structures. the structu
 requirements
 ============
 
--   liblo osc
--   pyopengl
 -   pygame
--   trimesh
--   numpy, scipy, ...
+-   pyopengl
+-   numpy, scipy - can also be installed with distribution tools
+-   pyliblo - python wrapper for liblo OSC library
+-   trimesh, meshpy - mesh libraries
 
-modules
-=======
-
--   oscsrv
--   sensorimotor
+``` example
+pip3 install pygame pyopengl numpy scipy pyliblo trimesh pyzmq joblib meshpy
+```
 
 running scripts
 ===============
 
-go into the project directory
+to run the demo go into the project directory
 
 ``` example
 cd smp_meshgrid
@@ -30,7 +28,7 @@ cd smp_meshgrid
 trigrid<sub>display</sub>
 -------------------------
 
-run the GL display with
+then start the GL display with
 
 ``` example
 python3 scripts/trigrid_display.py --width=1600 --height=900
@@ -39,9 +37,7 @@ python3 scripts/trigrid_display.py --width=1600 --height=900
 trigrid
 -------
 
-this is the model, loading a mesh and sending vertex, edge and face information to the display server
-
-run the model with
+this contains the model, and when running loads a mesh and sends vertex, edge and face information derived from model states to the display server. run it with
 
 ``` example
 python3 scripts/trigrid.py
@@ -56,4 +52,10 @@ then there are a few modes that serve as simple demo and starting points for ext
 -   threshold crossing triggered activation with lateral coupled neighbors
 -   TODO: random activation and isotropic propagation
 -   TODO: liquid model
+
+modules
+=======
+
+-   oscsrv
+-   sensorimotor
 

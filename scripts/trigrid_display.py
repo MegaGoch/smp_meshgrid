@@ -9,7 +9,6 @@ from OpenGL.GLU import *
 
 import trimesh
 
-
 import zmq
 from oscpy.server import OSCThreadServer
 from smp_meshgrid.oscsrv import OSCsrv

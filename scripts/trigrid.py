@@ -33,7 +33,7 @@ from pprint import pformat
 
 from scipy.spatial.transform import Rotation as R
 import joblib
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 # use meshpy
 import meshpy.triangle as triangle
