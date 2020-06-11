@@ -17,6 +17,8 @@ from __future__ import division
 from __future__ import absolute_import
 
 import pickle, sys, time, threading, argparse, queue, signal
+import itertools
+from functools import partial
 
 import pygame
 from pygame.locals import *
@@ -235,9 +237,10 @@ class smnode(threading.Thread):
         self.outputs = {
             'state_o': np.zeros_like(self.state)
         }
+        self.cap_budget = np.zeros_like(self.state)
         
         # set from available keyword arguments
-        for k in ['smid', 'density', 'freq', 'color', 'neighbors']:
+        for k in ['smid', 'density', 'freq', 'color', 'neighbors', 'inputs']:
             if k in kwargs:
                 setattr(self, k, kwargs[k])
 
@@ -286,8 +289,8 @@ class smnode(threading.Thread):
         
         # print(valid_neighbors)
         for input_n in self.inputs:
-            
-            if self.inputs[input_n] > 0.0:
+            # neighbor coupling
+            if input_n.startswith('n') and self.inputs[input_n] > 0.0:
                 # x_ = 0.0 * tris[tri_i]['state'] + (0.9 * tris[v_n]['state'])
                 # x_ = 0.5 * tris[tri_i]['state'] + (0.5 * tris[v_n]['state'])
                 # coupling = 0.05
@@ -328,24 +331,29 @@ class smnode(threading.Thread):
         
         # y_ += 0.05 * np.sin((self.cnt/20.0) * tris[tri_i]['freq'] * 2 * np.pi)
         # x_ += 0.02 * np.sin((self.cnt/20) * 2 * np.pi * self.freq)
-        
-        # if tri_i == 0 and cnt % 100 == 0:
-        # if tri_i == 0 and np.random.uniform() < event_density:
-        if np.random.uniform() < self.density:
-            # print('refreshing state')
-            # tris[tri_i]['state'] = 1.0
-            y_ += 3.0 * np.random.uniform(-1, 1)
-            # tris[tri_i]['state'] = x_
-
-        
+                
         # print(tri_i, neighbors)
         
         # print(valid_neighbors)
         for input_n in self.inputs:
-            
-            transfer = self.coef_coupling * self.inputs[input_n]
-            y_ += transfer
-            # tris[v_n]['state'] -= transfer # coupling * tris[v_n]['state']
+            # neighbor coupling
+            if input_n.startswith('n'): # and self.inputs[input_n] > 0.0:
+                transfer = self.coef_coupling * self.inputs[input_n]
+                y_ += transfer
+                # tris[v_n]['state'] -= transfer # coupling * tris[v_n]['state']
+
+            # external coupling cap sense
+            if input_n.startswith('cap'):
+                # print('smnode-{2}.update_liquid input {0} = {1}'.format(input_n, self.inputs[input_n], self.smid))
+                # if tri_i == 0 and cnt % 100 == 0:
+                # if tri_i == 0 and np.random.uniform() < event_density:
+                if np.random.uniform() < self.density:
+                    # print('refreshing state')
+                    # tris[tri_i]['state'] = 1.0
+                    self.cap_budget = 1.5 * np.random.uniform(-1, 1)
+                    # tris[tri_i]['state'] = x_
+                y_ += 0.2 * self.cap_budget
+                self.cap_budget *= 0.8
         
         # activation decay
         self.state *= self.coef_loss
@@ -354,9 +362,9 @@ class smnode(threading.Thread):
         self.state += y_
 
         if self.state >= 0:
-            self.color = np.array((1., 0, 0))
+            self.color = np.array((1., 1.0, 0))
         else:
-            self.color = np.array((0., 0, 1.0))
+            self.color = np.array((0., 1.0, 1.0))
         
         # output transfer function
         # tris[tri_i]['state_o'] = np.log(tris[tri_i]['state'] + 1) * 2
@@ -381,8 +389,12 @@ class meshTrimesh(threading.Thread):
         # self.osc_target = '1234'
         self.osc_target = liblo.Address('localhost', 1234, liblo.UDP)
         self.osc_target_hexagon = liblo.Address('localhost', 1236, liblo.UDP)
+
+        self.sensors = [0.0 for _ in range(6)]
         
-        self.coupling = 0.2
+        # self.coupling = 0.2
+        self.coupling = 0.02
+        # self.coupling = 0.005
         self.isrunning = True
         self.cnt = 0
         
@@ -392,21 +404,36 @@ class meshTrimesh(threading.Thread):
             self.cnt += 1
             time.sleep(1/20.)
 
+    def set_sensors(self, sensors):
+        self.sensors = np.array(sensors)
+        self.sensors += np.random.uniform(-1e-3, 1e-3, self.sensors.shape)
+            
     def update(self):
+        """meshTrimesh.update
+        """
         # todo
         # - loop over neighbors
-        # for nbrs in self.mesh.face_adjacency:
-        for nbrs in [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0]]:
+        # for nbrs in [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0]]:
+        for nbrs in self.mesh.face_adjacency:
             # print('nbrs', nbrs)
             # - populate node inputs with external values
             # self.mesh.face_attributes['smnode'][nbrs[0]].inputs['n{0}'.format(nbrs[1])] = self.mesh.face_attributes['state_o'][nbrs[1]]
             # self.mesh.face_attributes['smnode'][nbrs[1]].inputs['n{0}'.format(nbrs[0])] = self.mesh.face_attributes['state_o'][nbrs[0]]
-            self.mesh.face_attributes['smnode'][nbrs[0]].inputs['n{0}'.format(nbrs[1])] = self.coupling * self.mesh.face_attributes['smnode'][nbrs[1]].state
-            self.mesh.face_attributes['smnode'][nbrs[1]].state -= self.coupling * self.mesh.face_attributes['smnode'][nbrs[1]].state
+
+            # # explicit coupling
+            # self.mesh.face_attributes['smnode'][nbrs[0]].inputs['n{0}'.format(nbrs[1])] = self.coupling * self.mesh.face_attributes['smnode'][nbrs[1]].state
+            # self.mesh.face_attributes['smnode'][nbrs[1]].state -= self.coupling * self.mesh.face_attributes['smnode'][nbrs[1]].state
             
             # self.mesh.face_attributes['smnode'][nbrs[1]].inputs['n{0}'.format(nbrs[0])] = self.coupling * self.mesh.face_attributes['smnode'][nbrs[0]].state
             # self.mesh.face_attributes['smnode'][nbrs[0]].state -= self.coupling * self.mesh.face_attributes['smnode'][nbrs[0]].state
-        
+
+            # sensor coupling
+            self.mesh.face_attributes['smnode'][nbrs[0]].inputs['n{0}'.format(nbrs[1])] = self.coupling * self.sensors[nbrs[1]]
+            self.mesh.face_attributes['smnode'][nbrs[1]].state -= self.coupling * self.sensors[nbrs[1]]
+            
+            self.mesh.face_attributes['smnode'][nbrs[1]].inputs['n{0}'.format(nbrs[0])] = self.coupling * self.sensors[nbrs[0]]
+            self.mesh.face_attributes['smnode'][nbrs[0]].state -= self.coupling * self.sensors[nbrs[0]]
+            
     def make_mesh_triangle_trimesh(self, **params):
         """make_mesh_triangle_trimesh
         
@@ -565,6 +592,15 @@ def get_params(obj='line', c=1, dim=3):
     }
     return params
 
+# def cb_hexagon_sensors(qu, path, args, types, target, unk):
+#     # def cb_hexagon_sensors(*args, **kwargs):
+#     # i, f = args
+#     # print('args = {0}, kwargs = {1}'.format(args, kwargs))
+#     # print('qu = {0}'.format(qu))
+#     # print("cb_hexagon_sensors message {0} with arguments {1}".format(path, args))
+#     qu.put((path, args))
+#     # print('received args {0}'.format(args))
+    
 def main(args):
     """meshgrid.main
 
@@ -579,7 +615,6 @@ def main(args):
     def _interrupt_handler(signum, frame):
         """Handle KeyboardInterrupt: quit application."""
         print('Got QUIT event, terminating threads')
-        running = False
         # terminate osc server
         osc.isrunning = False
         osc.join()
@@ -593,6 +628,7 @@ def main(args):
             mesh.mesh.face_attributes['smnode'][i].isrunning = False
             mesh.mesh.face_attributes['smnode'][i].join()
         print('    smnodes stopped')
+        running = False
         pygame.quit()
         quit()
         
@@ -610,6 +646,12 @@ def main(args):
     # osc = OSCClient('localhost', 1234)
     qu = queue.Queue(maxsize=10)
     osc = OSCsrv(port=1235, queue=qu)
+    # osc.add_method(
+    #     path="/hexagon_sensors",
+    #     types='iiiiiiiiiiii',
+    #     # use a partial here to bind the qu argument
+    #     callback=partial(cb_hexagon_sensors, qu)
+    # )
     # osc_target = liblo.Address(1337)
     osc_target = '1234'
     # liblo.send(target, "/reconnect", 'bang')
@@ -620,14 +662,24 @@ def main(args):
     params['osc'] = osc
     mesh = meshClass(**params)
 
-    # populate nodes
+    dim_state = 1
+    
+    # populate mesh with sensorimotor nodes
     mesh.mesh.face_attributes['smnode'] = []
     for i, face in enumerate(mesh.mesh.faces):
+        smnode_inputs_ = {}
+        face_nbrs = [_.tolist() for _ in mesh.mesh.face_adjacency if face in _]
+        face_nbrs_flat = [_ for _ in list(itertools.chain(*face_nbrs)) if face != _]
+        for face_nbr in face_nbrs_flat:
+            smnode_inputs_['n{0}'.format(face_nbr)] = np.zeros((dim_state,1))
+        smnode_inputs_['cap'] = np.zeros((2,1))
+        
         mesh.mesh.face_attributes['smnode'].append(
             smnode(smid=i,
                    density=args.density,
                    color=mesh.mesh.face_attributes['color'][i],
                    freq=mesh.mesh.face_attributes['freq'][i],
+                   inputs=smnode_inputs_,
             )
         )
         mesh.mesh.face_attributes['smnode'][-1].start()
@@ -695,6 +747,11 @@ def main(args):
 
     # osc.send_message(b'/scale', [3.0, 3.0, 3.0])
     osc.server.send(osc_target, '/scale', *([4.0, 4.0, 4.0]))
+
+    sensors = np.array([0. for _ in range(6)])
+    sensors_mean = np.array([0. for _ in range(6)])
+    sensors_var = np.array([0. for _ in range(6)])
+    sensors_std = np.array([0. for _ in range(6)])
     
     # start main loop
     running = True
@@ -709,7 +766,29 @@ def main(args):
                 
         # # glRotatef(1, 3, 3, 3)
         # glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT)
+        
+        # while qu.qsize() > 0:
+        #     qud = qu.get()
+        #     if qud is not None:
+        #         # loopfunc_hexagon(qud[1], cord)
+        #         print('sensors {0}'.format(qud[1][6]))
+        sys.stdout.write('sensors\n')
+        for i in range(6):
+            # sys.stdout.write('{0:3d}, {1:3d}, '.format(osc.hexagon_sensors[i][6], osc.hexagon_sensors[i][7]))
+            # sys.stdout.write('{0:3d}, '.format(osc.hexagon_sensors[i][7]))
+            sensors[i] = osc.hexagon_sensors[i][7]
+            sensors_mean[i] = 0.9 * sensors_mean[i] + 0.1 * sensors[i]
+            sensors_var[i] = 0.9 * sensors_var[i] + 0.1 * np.square(sensors[i] - sensors_mean[i])
+            if np.sum(sensors_var > 0.) >= 6:
+                sensors_std[i] = (sensors[i] - sensors_mean[i]) / np.clip(0.01, 100, sensors_var[i])
+        sys.stdout.write('{0}\n'.format(sensors))
+        sys.stdout.write('{0}\n'.format(sensors_mean))
+        sys.stdout.write('{0}\n'.format(sensors_var))
+        sys.stdout.write('{0}\n'.format(sensors_std))
+        sys.stdout.write('\n')
 
+        mesh.set_sensors(sensors_std)
+        
         # # render function on mesh
         mesh.send_state(cnt, mesh.mesh, mesh.tris, mesh.valid_neighbors_all)
         

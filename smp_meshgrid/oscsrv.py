@@ -25,6 +25,9 @@ class OSCsrv(object):
         # self.server.add_method("/load", 'i', self.cb_load)
         self.server.add_method("/load", 's', self.cb_load)
         self.server.add_method("/facecolor", 'ifff', self.cb_facecolor)
+        self.server.add_method("/hexagon_sensors", 'iiiiiiiiiiii', self.cb_hexagon_sensors)
+        self.hexagon_sensors = [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] for _ in range(6)]
+        self.ids_smnode = [0, 1, 2, 6, 4, 5]
         self.callbacks = []
 
         self.st = threading.Thread( target = self.run )
@@ -35,6 +38,11 @@ class OSCsrv(object):
         self.address = args
         self.queue.put((path, args))
         
+    def cb_hexagon_sensors(self, path, args, types, target, unk):
+        # print('cb_perspective received args {0}'.format(args))
+        self.hexagon_sensors[self.ids_smnode.index(args[0])] = args
+        # self.queue.put((path, args))
+    
     def cb_perspective(self, path, args):
         print('cb_perspective received args {0}'.format(args))
         self.perspective = args

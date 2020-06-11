@@ -70,14 +70,13 @@ class ctrlOSC(object):
 
 # threading.Thread
 class trigridDisplay(object):
-    def __init__(self):
+    def __init__(self, width=1200, height=900):
         super(trigridDisplay, self).__init__()
         self.isinit = False
         # initialize pygame and OpenGL
         pygame.init()
-        # display = (800,600)
-        # self.displaysize = (1200, 900)
-        self.displaysize = (1920, 1080)
+        # display params
+        self.displaysize = (width, height)
         self.window = pygame.display.set_mode(self.displaysize, DOUBLEBUF|OPENGL)
         self.clock  = pygame.time.Clock()
 
@@ -292,7 +291,7 @@ class trigridDisplay(object):
             
 def main(args):
 
-    d = trigridDisplay()
+    d = trigridDisplay(width=args.width, height=args.height)
     while not d.isinit:
         time.sleep(0.1)
 
@@ -306,6 +305,8 @@ def main(args):
 if __name__ == '__main__':
     # command line arguments
     parser = argparse.ArgumentParser()
+    parser.add_argument('-dw', '--width',  type=int, default=1200, help='Display width  [1200]')
+    parser.add_argument('-dh', '--height', type=int, default=900,  help='Display height  [900]')
 
     args = parser.parse_args()
     
