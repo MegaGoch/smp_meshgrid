@@ -22,7 +22,7 @@ to run the demo go into the project directory
 
 : cd smp_meshgrid
 
-** trigrid_display
+** trigrid\_display
 
 then start the GL display with
 
