@@ -6,7 +6,9 @@ pi@tauntaun:~/work/Limbo $ ls -altr
 
 In [1]: np                                                  
 ------------------------------------------------------------
-NameError                  Traceback (most recent call last)
+NameError   
+
+Traceback (most recent call last)
 <ipython-input-1-6fecebd0febc> in <module>
 ----> 1 np
 
@@ -117,9 +119,6 @@ Out[24]: [<matplotlib.lines.Line2D at 0x7f3faa74ffa0>]
 In [25]:                                                                                                         
 
 
-
-
-
 How to install ipython, / jupter console 
 ---:~$ scp hex:work/Limbo/sensors_recording-1607615912.npy .
 
@@ -151,28 +150,11 @@ python
 
 ---:~$ sudo apt install python3-ip
 
-aamoun@maamoun-HP-ENVY-Notebook:~$ sudo apt install python3-ipy
+----:~$ sudo apt install python3-ipy
 
 ---:~$ ipy^C
 ---:~$ jupy^C
 ---:~$ sudo apt install python3-jupyter-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ---:~$ sudo apt install python3-jupyter-
 
